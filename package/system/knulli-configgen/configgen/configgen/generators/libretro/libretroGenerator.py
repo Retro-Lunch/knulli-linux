@@ -63,6 +63,56 @@ class LibretroGenerator(Generator):
         rom_path = Path(rom)
         commandEnv={"XDG_CONFIG_HOME":CONFIGS}
 
+        # Pass netplay mode to hooks via environment variable
+        if system.isOptSet('netplay_mode') and system.config['netplay_mode'] != 'disabled':
+            netplay_mode = system.config['netplay_mode']
+
+            # Pass ROM path for hash validation
+            commandEnv['ROM_PATH'] = str(rom_path)
+
+            if netplay_mode == 'host':
+                commandEnv['NETPLAY_MODE'] = 'host'
+                # Pass netplay port if configured
+                if system.isOptSet('netplay_port'):
+                    commandEnv['NETPLAY_PORT'] = str(system.config['netplay_port'])
+
+            elif netplay_mode == 'client':
+                # Client mode: run discovery to find and validate host
+                import subprocess
+                import os
+
+                # Only auto-discover if server IP is not manually set
+                server_ip = system.config.get('netplay_server_ip', '')
+
+                if not server_ip or server_ip.strip() == '':
+                    # Run discovery script with ROM path for validation
+                    discovery_script = '/usr/share/configgen/scripts/netplay_discover.sh'
+                    try:
+                        result = subprocess.run(
+                            [discovery_script],
+                            env={**os.environ, 'ROM_PATH': str(rom_path)},
+                            capture_output=True,
+                            text=True,
+                            timeout=12
+                        )
+
+                        if result.returncode == 0 and result.stdout.strip():
+                            # Discovery successful, use discovered IP
+                            discovered_ip = result.stdout.strip()
+                            system.config['netplay_server_ip'] = discovered_ip
+                            eslog.info(f"Auto-discovered netplay host at {discovered_ip}")
+                        else:
+                            # Discovery failed, use default
+                            system.config['netplay_server_ip'] = '192.168.4.1'
+                            if result.stderr:
+                                eslog.warning(f"Netplay discovery: {result.stderr.strip()}")
+                    except subprocess.TimeoutExpired:
+                        eslog.warning("Netplay discovery timed out, using default IP")
+                        system.config['netplay_server_ip'] = '192.168.4.1'
+                    except Exception as e:
+                        eslog.warning(f"Netplay discovery failed: {e}")
+                        system.config['netplay_server_ip'] = '192.168.4.1'
+
         # Fix for the removed MESS/MAMEVirtual cores
         if system.config['core'] in [ 'mess', 'mamevirtual' ]:
             system.config['core'] = 'mame'
