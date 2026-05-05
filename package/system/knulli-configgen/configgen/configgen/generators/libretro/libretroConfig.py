@@ -932,8 +932,69 @@ def createLibretroConfig(generator: Generator, system: Emulator, controllers: Co
     else:
         retroarchConfig['video_scale_integer_axis'] = '0'
 
-    # Netplay management
-    if 'netplay.mode' in system.config and system.config['netplay.mode'] in systemNetplayModes:
+    # Netplay management - support per-game configuration from context menu
+    if system.isOptSet('netplay_mode') and system.config['netplay_mode'] != 'disabled':
+        netplay_mode = system.config['netplay_mode']
+
+        if netplay_mode in systemNetplayModes:
+            # Security: hardcore mode disables save states, which would kill netplay
+            retroarchConfig['cheevos_hardcore_mode_enable'] = 'false'
+
+            # Set common netplay settings
+            retroarchConfig['netplay_mode'] = "false"  # host default
+            retroarchConfig['netplay_ip_port'] = system.config.get('netplay_port', '55435')
+            retroarchConfig['netplay_delay_frames'] = systemConfig.get('netplay.frames', '0')
+            retroarchConfig['netplay_nickname'] = system.config.get('netplay_nickname', 'KNULLI Player')
+            retroarchConfig['netplay_client_swap_input'] = "false"
+
+            # Client/Spectator mode configuration
+            if netplay_mode == 'client' or netplay_mode == 'spectator':
+                retroarchConfig['netplay_mode'] = "true"
+                server_ip = system.config.get('netplay_server_ip', '192.168.4.1')
+                retroarchConfig['netplay_ip_address'] = server_ip
+                retroarchConfig['netplay_ip_port'] = system.config.get('netplay_port', '55435')
+                retroarchConfig['netplay_client_swap_input'] = "true"
+
+            # Client mode specific
+            if netplay_mode == 'client':
+                password = system.config.get('netplay_password', '')
+                if password:
+                    retroarchConfig['netplay_password'] = f'"{password}"'
+                else:
+                    retroarchConfig['netplay_password'] = ""
+
+            # Spectator mode specific
+            if netplay_mode == 'spectator':
+                retroarchConfig['netplay_start_as_spectator'] = "true"
+                password = system.config.get('netplay_password', '')
+                if password:
+                    retroarchConfig['netplay_spectate_password'] = f'"{password}"'
+                else:
+                    retroarchConfig['netplay_spectate_password'] = ""
+            else:
+                retroarchConfig['netplay_start_as_spectator'] = "false"
+
+            # Host mode passwords
+            if netplay_mode == 'host':
+                password = system.config.get('netplay_password', '')
+                retroarchConfig['netplay_password'] = f'"{password}"' if password else ""
+                spectate_password = system.config.get('netplay_spectate_password', '')
+                retroarchConfig['netplay_spectate_password'] = f'"{spectate_password}"' if spectate_password else ""
+
+            # Always disable public announce for local ad-hoc
+            retroarchConfig['netplay_public_announce'] = 'false'
+
+            # Spectator mode enable
+            if system.isOptSet('netplay.spectator') and system.getOptBoolean('netplay.spectator'):
+                retroarchConfig['netplay_spectator_mode_enable'] = 'true'
+            else:
+                retroarchConfig['netplay_spectator_mode_enable'] = 'false'
+
+            # Disable relay for ad-hoc (local only)
+            retroarchConfig['netplay_use_mitm_server'] = "false"
+
+    # Maintain backward compatibility with old global netplay.mode config
+    elif 'netplay.mode' in system.config and system.config['netplay.mode'] in systemNetplayModes:
         # Security : hardcore mode disables save states, which would kill netplay
         retroarchConfig['cheevos_hardcore_mode_enable'] = 'false'
         # Quite strangely, host mode requires netplay_mode to be set to false when launched from command line
