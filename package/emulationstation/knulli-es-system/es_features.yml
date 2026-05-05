@@ -613,6 +613,40 @@ libretro:
         choices:
             "On":   "true"
             "Off":  "false"
+    netplay_mode:
+        group: NETWORK OPTIONS
+        prompt: AD-HOC NETPLAY MODE
+        description: Enable local wireless multiplayer. Host creates hotspot, clients connect to play together.
+        choices:
+            "Disabled": "disabled"
+            "Host (Create Hotspot)": "host"
+            "Client (Join Hotspot)": "client"
+            "Spectator": "spectator"
+    netplay_port:
+        group: NETWORK OPTIONS
+        prompt: NETPLAY PORT
+        description: Network port for netplay connection.
+        preset: input
+    netplay_password:
+        group: NETWORK OPTIONS
+        prompt: NETPLAY PASSWORD
+        description: Password to join or protect the game session.
+        preset: input
+    netplay_nickname:
+        group: NETWORK OPTIONS
+        prompt: NETPLAY NICKNAME
+        description: Your display name in multiplayer sessions.
+        preset: input
+    netplay_server_ip:
+        group: NETWORK OPTIONS
+        prompt: SERVER IP ADDRESS
+        description: IP address of the host to connect to. Leave blank to auto-discover via broadcast.
+        preset: input
+    netplay_hotspot_enabled:
+        group: NETWORK OPTIONS
+        prompt: AUTO-ENABLE HOTSPOT
+        description: Automatically create WiFi hotspot when hosting. Requires ad-hoc WiFi support.
+        preset: switchauto
   cores:
     '81':
       features: [netplay, padtokeyboard]
