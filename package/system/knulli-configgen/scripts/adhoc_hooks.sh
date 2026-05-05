@@ -23,6 +23,29 @@ is_quickresume_boot() {
 }
 
 should_start_ap() {
+    # Check per-game netplay mode first (passed via environment)
+    if [ -n "$NETPLAY_MODE" ] && [ "$NETPLAY_MODE" = "host" ]; then
+        # Per-game host mode - check if hotspot is enabled
+        HOTSPOT_SETTING=$(knulli-settings-get netplay_hotspot_enabled)
+        if [ "$HOTSPOT_SETTING" = "1" ] || [ "$HOTSPOT_SETTING" = "auto" ] || [ -z "$HOTSPOT_SETTING" ]; then
+            # Proceed with other checks
+            if is_quickresume_boot; then
+                return 1
+            fi
+
+            if [ -z "$INTERFACE" ]; then
+                return 1
+            fi
+
+            if ip addr show "$INTERFACE" | grep -q 'inet '; then
+                return 1
+            fi
+
+            return 0
+        fi
+    fi
+
+    # Fall back to global settings (backward compatibility)
     if [ "$(knulli-settings-get global.netplay)" != "1" ] || [ "$(knulli-settings-get global.netplay.hotspot)" != "1" ]; then
         return 1
     fi
@@ -81,10 +104,19 @@ EOF
                 fi
                 sleep 0.1
             done
+
+            # Start broadcast service for client discovery
+            SCRIPT_DIR="$(dirname "$0")"
+            HOST_IP="192.168.4.1" NETPLAY_PORT="${NETPLAY_PORT:-55435}" \
+                "$SCRIPT_DIR/netplay_broadcast.sh" start
         fi
         ;;
     gameStop)
         if [ -f "$adhoc_flag" ]; then
+            # Stop broadcast service
+            SCRIPT_DIR="$(dirname "$0")"
+            "$SCRIPT_DIR/netplay_broadcast.sh" stop
+
             kill "$(cat "$hostapd_pid")"
             rm -f "$hostapd_pid"
 
