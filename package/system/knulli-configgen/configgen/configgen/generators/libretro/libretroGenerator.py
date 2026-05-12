@@ -352,7 +352,11 @@ class LibretroGenerator(Generator):
             if system.config['netplay.mode'] == 'host':
                 commandArray.append("--host")
             elif system.config['netplay.mode'] == 'client' or system.config['netplay.mode'] == 'spectator':
-                commandArray.extend(["--connect", system.config['netplay.server.ip']])
+                # Auto-set server IP to ad-hoc host if not specified
+                server_ip = system.config.get('netplay.server.ip', '192.168.4.1')
+                if not server_ip or server_ip == '':
+                    server_ip = '192.168.4.1'
+                commandArray.extend(["--connect", server_ip])
             if 'netplay.server.port' in system.config:
                 commandArray.extend(["--port", system.config['netplay.server.port']])
             if 'netplay.server.session' in system.config:
