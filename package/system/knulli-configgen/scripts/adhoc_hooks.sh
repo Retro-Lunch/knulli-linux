@@ -42,8 +42,85 @@ should_start_ap() {
     return 0
 }
 
+should_join_adhoc() {
+    # Check if netplay is enabled
+    if [ "$(knulli-settings-get global.netplay)" != "1" ]; then
+        return 1
+    fi
+
+    # Check if client mode (reading from netplay config if available)
+    # This will be set when launching a game in client mode
+    if [ -f /tmp/netplay_mode ]; then
+        mode=$(cat /tmp/netplay_mode)
+        if [ "$mode" != "client" ]; then
+            return 1
+        fi
+    else
+        return 1
+    fi
+
+    # Check if already connected to netplay hotspot
+    current_ssid=$(iwgetid -r 2>/dev/null)
+    if [[ "$current_ssid" =~ NETPLAY ]]; then
+        return 1  # Already connected
+    fi
+
+    return 0
+}
+
+join_adhoc_hotspot() {
+    # Scan for NETPLAY_AP
+    local hotspot=$(iw dev "$INTERFACE" scan 2>/dev/null | \
+        awk '/^BSS / {ssid=""}
+             /SSID: / {
+                 ssid = substr($0, index($0, "SSID: ") + 6)
+                 if (ssid ~ /NETPLAY/) {print ssid; exit}
+             }')
+
+    if [ -z "$hotspot" ]; then
+        echo "No NETPLAY hotspot found" >&2
+        return 1
+    fi
+
+    # Create wpa_supplicant config
+    local wpa_conf="/tmp/netplay_join.conf"
+    cat > "$wpa_conf" <<EOF
+ctrl_interface=/var/run/wpa_supplicant
+update_config=1
+
+network={
+    ssid="$hotspot"
+    psk="$PASSPHRASE"
+    key_mgmt=WPA-PSK
+    priority=100
+}
+EOF
+
+    # Stop existing wpa_supplicant
+    pkill -f "wpa_supplicant.*$INTERFACE" 2>/dev/null
+    sleep 0.5
+
+    # Start wpa_supplicant
+    wpa_supplicant -B -i "$INTERFACE" -c "$wpa_conf" -P /tmp/netplay_join.pid >/dev/null 2>&1
+
+    # Wait for connection (max 10 seconds)
+    for i in {1..20}; do
+        if ip addr show "$INTERFACE" 2>/dev/null | grep -q 'inet '; then
+            rm -f "$wpa_conf"
+            echo "Connected to $hotspot" >&2
+            return 0
+        fi
+        sleep 0.5
+    done
+
+    rm -f "$wpa_conf"
+    echo "Failed to connect to $hotspot" >&2
+    return 1
+}
+
 case $1 in
     gameStart)
+        # Check if we should host an ad-hoc hotspot
         if should_start_ap; then
             touch "$adhoc_flag"
 
@@ -81,6 +158,9 @@ EOF
                 fi
                 sleep 0.1
             done
+        # Check if we should join an ad-hoc hotspot (client mode)
+        elif should_join_adhoc; then
+            join_adhoc_hotspot
         fi
         ;;
     gameStop)
@@ -95,6 +175,14 @@ EOF
             ip addr flush dev "$INTERFACE"
             rm -f "$adhoc_flag"
         fi
+
+        # Clean up netplay join artifacts
+        if [ -f /tmp/netplay_join.pid ]; then
+            kill "$(cat /tmp/netplay_join.pid)" 2>/dev/null || true
+            rm -f /tmp/netplay_join.pid
+        fi
+        rm -f /tmp/netplay_mode
+
         ;;
 esac
 

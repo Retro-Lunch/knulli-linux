@@ -342,6 +342,13 @@ class LibretroGenerator(Generator):
 
         # Netplay mode
         if 'netplay.mode' in system.config:
+            # Write netplay mode to temp file for adhoc_hooks.sh to check
+            try:
+                with open('/tmp/netplay_mode', 'w') as f:
+                    f.write(system.config['netplay.mode'])
+            except:
+                pass
+
             if system.config['netplay.mode'] == 'host':
                 commandArray.append("--host")
             elif system.config['netplay.mode'] == 'client' or system.config['netplay.mode'] == 'spectator':
@@ -352,6 +359,12 @@ class LibretroGenerator(Generator):
                 commandArray.extend(["--mitm-session", system.config['netplay.server.session']])
             if 'netplay.nickname' in system.config:
                 commandArray.extend(["--nick", system.config['netplay.nickname']])
+        else:
+            # Clear netplay mode file if not in netplay
+            try:
+                os.remove('/tmp/netplay_mode')
+            except:
+                pass
 
         # Verbose logs
         commandArray.extend(['--verbose'])
